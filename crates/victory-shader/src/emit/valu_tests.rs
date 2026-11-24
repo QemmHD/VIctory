@@ -209,6 +209,28 @@ fn run_cases(
 
 #[test]
 fn scalar_buffer_load_uses_byte_offsets_with_a_raw_host_view() {
+    assert_eq!(
+        scalar_load_at_20(Stride::Raw),
+        [86],
+        "byte offset 20 in the raw host view"
+    );
+}
+
+/// The title's view of a buffer its program reads with `s_buffer_load` can
+/// be structured (a `StructuredBuffer` read uniformly): the host view is
+/// then structured too, and the translated scalar load must still read it.
+#[test]
+fn scalar_buffer_load_reads_a_structured_host_view() {
+    assert_eq!(
+        scalar_load_at_20(Stride::Structured(16)),
+        [86],
+        "byte offset 20 in a structured host view of 16-byte elements"
+    );
+}
+
+/// `s_buffer_load_dword` at byte offset 20 of a console descriptor with a
+/// 16-byte stride, through a host view of `view` over dwords 81..=88.
+fn scalar_load_at_20(view: Stride) -> Vec<u32> {
     let input = s_load_dwordx4(4, 0);
     let mut output = s_load_dwordx4(8, 0);
     output[1] |= 32; // second heap slot
@@ -282,7 +304,7 @@ fn scalar_buffer_load_uses_byte_offsets_with_a_raw_host_view() {
                 views: &[
                     View::Buffer {
                         data: &data,
-                        stride: Stride::Raw,
+                        stride: view,
                     },
                     View::RawUav(1),
                 ],
@@ -291,7 +313,7 @@ fn scalar_buffer_load_uses_byte_offsets_with_a_raw_host_view() {
             },
         )
         .expect("dispatch scalar load");
-    assert_eq!(out[0], [86], "byte offset 20 in the raw host view");
+    out[0].clone()
 }
 
 fn is_f16_nan(bits: u16) -> bool {
