@@ -355,3 +355,51 @@ fn first_lane_reads_are_the_console_waves() {
     ];
     console_flow_case("DPP and v_readfirstlane", &body, 64, |_| 0);
 }
+
+/// #468: a console wave64 program whose lanes read each other, translated
+/// for any host (`Target::ANY`, what `main` does), declares `WaveSize(64)`,
+/// and a host without 64-lane waves refuses the pipeline with
+/// `E_INVALIDARG` (`0x80070057`), the refusal the reports count by the
+/// hundred on NVIDIA. Translated for the host's own range it is created
+/// and runs exactly.
+#[test]
+fn a_wave64_program_for_any_host_is_refused_without_64_lane_waves() {
+    let Ok(names) = adapters() else {
+        eprintln!("no DXGI; skipped");
+        return;
+    };
+    let mut ran = 0;
+    for name in names {
+        let Ok(host) = Host::on(&name) else {
+            eprintln!("{name}: no SM 6.6 device; skipped");
+            continue;
+        };
+        let target = host.target();
+        if target.runs(64) {
+            eprintln!("{name}: runs 64-lane waves; skipped");
+            continue;
+        }
+        let p = program(IN_HALF, 64);
+        let any = emit_for(&p, super::Target::ANY).unwrap_or_else(|e| panic!("{name}: {e}"));
+        assert_eq!(wave_size(&any.dxil), Some(64), "{name}: for any host");
+        let refused = host
+            .compute_pipeline(&any)
+            .err()
+            .unwrap_or_else(|| panic!("{name}: a WaveSize(64) pipeline was created"));
+        assert!(
+            refused.contains("80070057") || refused.contains("parameter is incorrect"),
+            "{name}: refused with {refused}"
+        );
+        eprintln!("{name}: WaveSize(64) refused: {refused}");
+        let fit = emit_for(&p, target).unwrap_or_else(|e| panic!("{name}: {e}"));
+        assert_eq!(wave_size(&fit.dxil), Some(32), "{name}: for this host");
+        let out = run(&host, &p, 2).unwrap_or_else(|e| panic!("{name}: {e}"));
+        let want: Vec<u32> = (0..2).flat_map(|_| (0..64).map(|t| t ^ 31)).collect();
+        assert_eq!(out, want, "{name}: split");
+        eprintln!("{name}: for {target:?} created and exact");
+        ran += 1;
+    }
+    if ran == 0 {
+        eprintln!("no hardware adapter without 64-lane waves; skipped");
+    }
+}
