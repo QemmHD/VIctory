@@ -924,6 +924,10 @@ pub enum View<'a> {
     Cbv(&'a [u32]),
     /// A buffer SRV over these dwords.
     Buffer { data: &'a [u32], stride: Stride },
+    /// A null shader resource view of this description (no resource).
+    NullSrv(D3D12_SHADER_RESOURCE_VIEW_DESC),
+    /// A null unordered-access view of this description (no resource).
+    NullUav(D3D12_UNORDERED_ACCESS_VIEW_DESC),
 }
 
 /// How [`View::Buffer`] is viewed.
@@ -1280,6 +1284,17 @@ impl Host {
                         };
                         dev.CreateShaderResourceView(&b, Some(&desc), at);
                         keep.push(b);
+                    }
+                    View::NullSrv(desc) => {
+                        dev.CreateShaderResourceView(None::<&ID3D12Resource>, Some(&desc), at);
+                    }
+                    View::NullUav(desc) => {
+                        dev.CreateUnorderedAccessView(
+                            None::<&ID3D12Resource>,
+                            None::<&ID3D12Resource>,
+                            Some(&desc),
+                            at,
+                        );
                     }
                 }
             }

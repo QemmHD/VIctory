@@ -87,6 +87,8 @@ mod shader;
 #[cfg(windows)]
 pub mod validator;
 #[cfg(all(test, windows))]
+mod null_view_tests;
+#[cfg(all(test, windows))]
 mod valu_tests;
 mod wave;
 
